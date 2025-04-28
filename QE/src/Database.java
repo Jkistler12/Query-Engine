@@ -86,7 +86,8 @@ class Database {
      */
     public void populateDB() {
         for(ITable t: this.tables){
-            IO.readTable(t.getName(),table.getSchema(),folderName);
+            ITable nt=IO.readTable(t.getName(),t.getSchema(),folderName);
+            updateTable(nt);
         }
 
     }
@@ -110,7 +111,75 @@ class Database {
      * @throws InvalidQueryException
      */
     public void insertData(String query) throws InvalidQueryException {
+        String TableName="";
+        List<String>attributes= new ArrayList<>();
+        List<String>values= new ArrayList<>();
+        int i=0;
+        String word="";
+        boolean isAttributes=false;
+        boolean isValues=false;
+        int into=query.toLowerCase().indexOf("into");
+        int par=query.indexOf('(',into);
+        TableName=query.substring(into+4,par).trim();
+        ITable table= findTable(TableName);
+        i=par;
+        while(i<query.length()){
+                char c=query.charAt(i);
+                if(c=='('){
+                    if(!isAttributes && !isValues){
+                        isAttributes= true;
+                        word="";
+                }else if(isAttributes){
+                        isValues=true;
+                        isAttributes=false;
+                        word="";
+                    }
+            }else if(c==')'){
+                    if(isAttributes){
+                        if(!word.trim().isEmpty()){
+                            attributes.add(word.trim());
+                        }
+                        isAttributes=false;
+                    }else if(isValues){
+                        if(!word.trim().isEmpty()){
+                            values.add(word.trim());
+                        }
+                        isValues=false;
+                    }
+                    word="";
+                }else if(c==','){
+                    if(isAttributes){
+                        attributes.add(word.trim());
+                        word="";
+                    }else if(isValues){
+                        values.add(word.trim());
+                        word="";
+                    }else{
+                        word=word+c;
+                    }
+                }else {
+                    word=word+c;
+                }
+                i++;
 
+
+        }
+        ITuple tuple= new Tuple(table.getSchema());
+        for(int j=0;j<attributes.size();j++){
+            String attName= attributes.get(j);
+            boolean found=false;
+            for(int k=0;k<table.getSchema().getAttributes().size();k++){
+                String schemaAtt= table.getSchema().getAttributes().get(k).split(":")[0];
+                if(schemaAtt.equals(attName)){
+                    tuple.setValue(k, values.get(j));
+                    found=true;
+                    break;
+                }
+            }
+
+        }
+        IO.writeTuple(TableName,tuple.getValues(),folderName);
+        table.addTuple(tuple);
     }
 
     /**
@@ -147,9 +216,122 @@ class Database {
      * @throws InvalidQueryException
      */
     public ITable selectData(String query) throws InvalidQueryException {
-
+        int selectStart = query.toLowerCase().indexOf("select") + 6;
+        int fromStart = query.toLowerCase().indexOf("from");
+        int whereStart = query.toLowerCase().indexOf("where");
+        String fromClause;
+        String selectClause= query.substring(selectStart,fromStart).trim();
+        if (whereStart == -1) {
+            fromClause = query.substring(fromStart + 4).trim();
+        } else {
+            fromClause = query.substring(fromStart + 4, whereStart).trim();
+        }
+        String whereClause;
+        if(whereStart==-1){
+            whereClause="";
+        }else{
+            whereClause=query.substring(whereStart+5).trim();
+        }
+        int orderStart=query.toLowerCase().indexOf("order by");
+        String orderClause;
+        if(orderStart==-1){
+            orderClause="";
+        }else{
+            orderClause=query.substring(orderStart+9).trim();
+        }
+        ITable table=findTable(fromClause);
+        String[] attributes=selectClause.split(",");
+        for(int i=0;i<attributes.length;i++){
+            attributes[i]=attributes[i].trim();
+        }
+        Map<Integer,String> schemaAtt= table.getSchema().getAttributes();
+        for(String s: attributes){
+            boolean found= false;
+            for(String t: schemaAtt.values()){
+                String SchemaAttributes=t.split(":")[0];
+                if(SchemaAttributes.equals(s)){
+                    found=true;
+                    break;
+                }
+            }
+        }
+        Map<Integer, String>result= new HashMap<>();
+        int index=0;
+        for(String s: attributes){
+            for(int j=0;j<schemaAtt.size();j++ ){
+                String sv=schemaAtt.get(j);
+                String sa= sv.split(":")[0];
+                if(sa.equals(s)){
+                    result.put(index++,sv);
+                    break;
+                }
+            }
+        }
+        ISchema resultSchema= new Schema(result);
+        ITable resultTable= new Table("Result",resultSchema);
+        for(ITuple t: table.getTuples()){
+            boolean isWhere=true;
+            if(!whereClause.isEmpty()){
+                String[]condition= whereClause.split("=");
+                if(condition.length==2){
+                    String col=condition[0].trim();
+                    String val= condition[1].trim();
+                    int colIndex=-1;
+                    for(int i=0;i<schemaAtt.size();i++){
+                        String schemaCol= schemaAtt.get(i).split(":")[0];
+                        if(schemaCol.equals(col)){
+                            colIndex=i;
+                            break;
+                        }
+                    }
+                    if(colIndex!=-1){
+                        if(!t.getValue(colIndex).equals(val)){
+                            isWhere=false;
+                        }
+                    }
+                }
+            }
+            if(isWhere){
+                ITuple resultTuple=new Tuple(resultSchema);
+                int Index=0;
+                for(String s: attributes){
+                    for(int i=0;i<schemaAtt.size();i++){
+                        String schemaCol=schemaAtt.get(i).split(":")[0];
+                        if(schemaCol.equals(s)){
+                            resultTuple.setValue(Index++,t.getValue(i));
+                            break;
+                        }
+                    }
+                }
+                resultTable.addTuple(resultTuple);
+            }
+            if(!orderClause.isEmpty()){
+                int OrderIndex=-1;
+                for(int i=0; i<schemaAtt.size();i++){
+                    String SchemaCol= schemaAtt.get(i).split(":")[0];
+                    if(SchemaCol.equals(orderClause)){
+                        OrderIndex=i;
+                        break;
+                    }
+                }
+                if(OrderIndex!=-1){
+                    List<ITuple> tupleList=resultTable.getTuples();
+                    for(int i=0;i<tupleList.size()-1;i++){
+                        for(int j=i+1;j<tupleList.size();j++){
+                            String val1=(String) tupleList.get(i).getValue(OrderIndex);
+                            String val2=(String) tupleList.get(j).getValue(OrderIndex);
+                            if(val1.compareTo(val2)>0){
+                                ITuple temp= tupleList.get(i);
+                                tupleList.set(i,tupleList.get(j));
+                                tupleList.set(j,temp);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return resultTable;
     }
-
     /**
      * Delete data from a table
      * If the query in not valid, throws an InvalidQueryException
@@ -175,7 +357,51 @@ class Database {
      * @throws InvalidQueryException
      */
     public void deleteData(String query) throws InvalidQueryException {
+        int fromStart= query.toLowerCase().indexOf("from");
+        int whereStart= query.toLowerCase().indexOf("where");
+        String fromClause;
+        String whereClause;
+        if(whereStart==-1){
+            fromClause=query.substring(fromStart+4).trim();
+            whereClause="";
+        }else{
+            fromClause=query.substring(fromStart+4,whereStart).trim();
+            whereClause=query.substring(whereStart+5).trim();
+        }
+        ITable table=findTable(fromClause);
+        Map<Integer,String> schemaAtt=table.getSchema().getAttributes();
+        List<ITuple>tuples=table.getTuples();
+        List<ITuple>nt=new ArrayList<>();
+        if(!whereClause.isEmpty()){
+            String[]condition=whereClause.split("=");
+            String col=condition[0].trim();
+            String val=condition[1].trim();
+            int colIndex=-1;
+            for(int i=0;i<schemaAtt.size();i++){
+                String schemaCol=schemaAtt.get(i).split(":")[0];
+                if(schemaCol.equals(col)){
+                    colIndex=i;
+                    break;
+                }
+            }
+            for(ITuple t: tuples){
+                if(!t.getValue(colIndex).equals(val)){
+                    nt.add(t);
+                }
+            }
 
+        }
+        tuples.clear();
+        tuples.addAll(nt);
+        IO.writeTable(table, folderName);
+    }
+    private ITable findTable(String s){
+        for(ITable t: tables){
+            if(t.getName().equals(s)){
+                return t;
+            }
+        }
+        return null;
     }
 
 }
