@@ -73,7 +73,27 @@ public class IO {
      * @param folder
      */
     public static void writeTable(ITable table, String folder) {
-        try(BufferedReader writer= new BufferedReader((new FileWriter(new File(folder+"/"+table.getName()+".csv")))){
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(new File(folder + "/" + table.getName() + ".csv")))) {
+           ISchema schema=table.getSchema();
+           int schemaSize=schema.getAttributes().size();
+
+            for (ITuple t : table.getTuples()) {
+                StringBuilder line= new StringBuilder();
+                for (int i = 0; i < schemaSize; i++) {
+                    if (t.getValue(i) != null) {
+                        line.append(t.getValue(i).toString());
+                    }
+                    if (i <schemaSize-1) {
+                        line.append(",");
+                    }
+                }
+                writer.write(line.toString());
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
 
     /**
@@ -90,7 +110,16 @@ public class IO {
      * @param schema
      */
     public static void printTable(ITable table, ISchema schema) {
-
+        for(int i=0; i<schema.getAttributes().size();i++){
+           System.out.print(schema.getName(i)+" ");
+        }
+        System.out.println();
+        for(ITuple t: table.getTuples()){
+            for(int i=0;i<t.getValues().length;i++){
+                System.out.print(t.getValue(i)+" ");
+            }
+            System.out.println();
+        }
     }
 
 
@@ -107,7 +136,19 @@ public class IO {
      * @param folder
      */
     public static void writeTuple(String tableName, Object[] values, String folder) {
-
+        try(BufferedWriter writer= new BufferedWriter(new FileWriter(new File(folder+"/"+tableName+".csv")))){
+            for(int i=0;i< values.length;i++){
+                if(values[i]!=null){
+                    writer.write(values[i].toString());
+                }
+                if(i< values.length-1){
+                    writer.write(",");
+                }
+            }
+            writer.newLine();
+        }catch(IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -132,6 +173,27 @@ public class IO {
      * @param db
      */
     public static void readSchema(String schemaFileName, String folderName, Database db) {
+        try(Scanner scanner= new Scanner(new File(folderName+"/"+schemaFileName))){
+            while(scanner.hasNextLine()){
+                String line=scanner.nextLine().trim();
+                if(line.length()>0){
+                    String[]seperate=line.split(" ");
+                    String TName= seperate[0];
+                    Map<Integer,String> attributes= new HashMap<>();
+                    for(int i=1;i<seperate.length;i++){
+                        String[]attPart=seperate[i].split(":");
+                        String AName= attPart[0];
+                        String AType= attPart[1];
+                        attributes.put(i-1,AName+":"+AType);
+                    }
+                    ISchema schema=new Schema(attributes);
+                    ITable table= new Table(TName,schema);
+                    db.addTable(table);
+                }
+            }
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException("File not found: "+schemaFileName);
+        }
 
     }
 
