@@ -22,7 +22,17 @@ public class Main {
      * @param db
      */
     public static void runQuery(String query, Database db) {
-
+        if (query.contains("SELECT")){
+            db.selectData(query);
+        }
+        else if (query.contains("INSERT")) {
+            db.insertData(query);
+        }
+        else if (query.contains("DELETE")) {
+            db.deleteData(query);
+        }
+        else {
+            throw new IllegalArgumentException("Not a valid Query type");
+        }
     }
-
 }
