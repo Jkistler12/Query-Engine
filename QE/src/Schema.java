@@ -1,3 +1,4 @@
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -9,39 +10,41 @@ public class Schema implements ISchema {
 
     /**
      * constructor
-     * @param attributes
+     * @param attributes the given Map of attributes
      */
     public Schema(Map<Integer, String> attributes) {
-
+        for (Integer i : attributes.keySet()){
+            this.attributes.put(i,attributes.get(i));
+        }
     }
 
     /**
      * getter
-     * @return
+     * @return the map of attributes for This object
      */
     @Override
     public Map<Integer, String> getAttributes() {
-
+        return this.attributes;
     }
 
     /**
      * splits the name:type to return the attribute name
-     * @param index
-     * @return
+     * @param index the index of the name:type pair wanted
+     * @return a String representing the name attributed to the index
      */
     @Override
     public String getName(int index) {
-
+        return this.attributes.get(index).substring(0,this.attributes.get(index).indexOf(':'));
     }
 
     /**
      * splits the name:type to return the attribute type
-     * @param index
-     * @return
+     * @param index the index of the name:type pair wanted
+     * @return a String representing the name attributed to the index
      */
 
     @Override
     public String getType(int index) {
-
+        return this.attributes.get(index).substring(this.attributes.get(index).indexOf(':') + 1);
     }
 }
