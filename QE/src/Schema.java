@@ -13,9 +13,8 @@ public class Schema implements ISchema {
      * @param attributes the given Map of attributes
      */
     public Schema(Map<Integer, String> attributes) {
-        for (Integer i : attributes.keySet()){
-            this.attributes.put(i,attributes.get(i));
-        }
+        attributes = new HashMap<>();
+        this.attributes = attributes;
     }
 
     /**
